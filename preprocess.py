@@ -4,10 +4,10 @@ import re
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-def split_validation_set(file):
+def split_validation_set(file, random_state=12):
     df = pd.read_csv(file)
     # Randomly sample 80% of the rows for training (8,000 rows)
-    df_train = df.sample(frac=0.8, random_state=12)
+    df_train = df.sample(frac=0.8, random_state=random_state)
 
     # Drop the training rows to get the remaining 20% for testing
     df_validation = df.drop(df_train.index)
@@ -25,22 +25,35 @@ def clean_text(text):
     #lowercase all text
     text = text.lower()
 
-    #stop words??
+    #remove urls
+    text = re.sub(r'https?://\S+|www\.\S+', '', text)
 
-    #punctioatin???
+    # Remove Unix-style paths
+    text = re.sub(r'(/[^\s]+)+', ' FILEPATH ', text)
 
-    #lemantize??
+    # Remove Windows-style paths
+    text = re.sub(r'[A-Za-z]:\\[^\s]+', ' FILEPATH ', text)
 
-    #numbers?
+    # Remove long numbers
+    text = re.sub(r'\b\d{5,}\b', '', text)
 
-    #file paths?
+    # Replace UUIDs
+    text = re.sub(
+        r'\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-'
+        r'[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
+        r'[0-9a-fA-F]{12}\b',
+        'UUID',
+        text
+    )
 
-    #urls?
+    # Remove hashes
+    text = re.sub(r'\b[a-fA-F0-9]{8,}\b', '', text)
 
     #normalize whitespace
     text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
-def preprocess_data(X_train, X_validation, X_test):
+def tfidf_data(X_train, X_validation, X_test):
     #tf-idf
     vectorizer = TfidfVectorizer(
         max_features=10000,
@@ -62,14 +75,15 @@ def preprocess_data(X_train, X_validation, X_test):
     return X_train_tfidf, X_validation_tfidf, X_test_tfidf
 
 
-def sample_labeled_data(file, number_of_samples=8000, random_state=12):
-    df_train, df_validation = split_validation_set(file)
+def preprocess_data(featurization=tfidf_data, n=8000, random_state=12):
     
-    df_train = df_train.sample(n=number_of_samples, random_state=random_state)
+    df_train, df_validation = split_validation_set("train.csv", random_state=random_state)
+    
+    df_train = df_train.sample(n=n, random_state=random_state)
 
     X_train, y_train = unlabel_data(df_train)
     X_validation, y_validation = unlabel_data(df_validation)
 
     X_test = pd.read_csv("test.csv")["text"]
-    X_train, X_validation, X_test = preprocess_data(X_train, X_validation, X_test)
+    X_train, X_validation, X_test = featurization(X_train, X_validation, X_test)
     return X_train, y_train, X_validation, y_validation, X_test
