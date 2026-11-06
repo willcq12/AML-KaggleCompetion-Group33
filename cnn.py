@@ -16,6 +16,7 @@ from preprocess import nn_data, preprocess_data
 SEED = 12
 MAX_VOCAB = 30000
 MAX_LENGTH = 512
+PRESERVE_CASE = True
 BATCH_SIZE = 64
 EPOCHS = 15
 PATIENCE = 3
@@ -144,12 +145,14 @@ def main():
         device = torch.device("cpu")
 
     print(f"Device: {device}")
+    print(f"Preserve capitalization: {PRESERVE_CASE}")
 
     # Pass our sequence settings through the existing preprocessing API.
     featurization = partial(
         nn_data,
         max_vocab=MAX_VOCAB,
         max_length=MAX_LENGTH,
+        preserve_case=PRESERVE_CASE,
     )
 
     X_train, y_train, X_val, y_val, X_test = preprocess_data(
@@ -245,7 +248,8 @@ def main():
         "label": probabilities,
     })
 
-    output_path = data_dir / "submission_cnn.csv"
+    output_name = "submission_cnn_case.csv" if PRESERVE_CASE else "submission_cnn.csv"
+    output_path = data_dir / output_name
     submission.to_csv(output_path, index=False)
     print(f"Saved: {output_path}")
 

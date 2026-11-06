@@ -23,12 +23,13 @@ def unlabel_data(df):
     y = df['label']
     return X, y
 
-def clean_text(text):
-    #lowercase all text
-    text = text.lower()
+def clean_text(text, lowercase=True):
+    # Lowercase by default; allow NN experiments to preserve capitalization.
+    if lowercase:
+        text = text.lower()
 
     #remove urls
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text, flags=re.IGNORECASE)
 
     # Remove Unix-style paths
     text = re.sub(r'(/[^\s]+)+', ' FILEPATH ', text)
@@ -91,8 +92,15 @@ def preprocess_data(featurization=tfidf_data, n=8000, random_state=12):
     X_train, X_validation, X_test = featurization(X_train, X_validation, X_test)
     return X_train, y_train, X_validation, y_validation, X_test
 
-def nn_data(X_train, X_validation, X_test, max_vocab=30000, max_length=512):
-    """Convert text into padded token-ID sequences for a CNN."""
+def nn_data(
+    X_train,
+    X_validation,
+    X_test,
+    max_vocab=30000,
+    max_length=512,
+    preserve_case=False,
+):
+    """Convert text into padded token IDs, optionally preserving capitalization."""
     if max_vocab < 2 or max_length < 1:
         raise ValueError("max_vocab must be >= 2 and max_length >= 1")
 
@@ -101,7 +109,7 @@ def nn_data(X_train, X_validation, X_test, max_vocab=30000, max_length=512):
 
     def tokenize(texts):
         return [
-            pattern.findall(clean_text(text))
+            pattern.findall(clean_text(text, lowercase=not preserve_case))
             for text in texts.fillna("")
         ]
 
