@@ -1,16 +1,17 @@
 import numpy as np
 import pandas as pd
 import re
+from pathlib import Path
 
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split
 
 def split_validation_set(file, random_state=12):
     df = pd.read_csv(file)
-    # Randomly sample 80% of the rows for training (8,000 rows)
-    df_train = df.sample(frac=0.8, random_state=random_state)
-
-    # Drop the training rows to get the remaining 20% for testing
-    df_validation = df.drop(df_train.index)
+    # Hold out the same proportion of each label for validation.
+    df_train, df_validation = train_test_split(
+        df, test_size=0.2, random_state=random_state, stratify=df["label"]
+    )
 
     print(f"Train set size: {len(df_train)}")
     print(f"Validation set size: {len(df_validation)}")
@@ -77,13 +78,49 @@ def tfidf_data(X_train, X_validation, X_test):
 
 def preprocess_data(featurization=tfidf_data, n=8000, random_state=12):
     
-    df_train, df_validation = split_validation_set("train.csv", random_state=random_state)
+    df_train, df_validation = split_validation_set(_data_file("train.csv"), random_state=random_state)
     
-    df_train = df_train.sample(n=n, random_state=random_state)
+    if n != len(df_train):
+        df_train = df_train.sample(n=n, random_state=random_state)
 
     X_train, y_train = unlabel_data(df_train)
     X_validation, y_validation = unlabel_data(df_validation)
 
-    X_test = pd.read_csv("test.csv")["text"]
+    X_test = pd.read_csv(_data_file("test.csv"))["text"]
     X_train, X_validation, X_test = featurization(X_train, X_validation, X_test)
     return X_train, y_train, X_validation, y_validation, X_test
+
+
+def _data_file(name):
+    """Use the same repository data files regardless of working directory."""
+    return Path(__file__).resolve().parent / "data" / name
+
+
+def export_split(file, output_dir, random_state=12):
+    """Write the raw shared split without changing the source CSV."""
+    output_dir = Path(output_dir)
+    train_file = output_dir / "train_split.csv"
+    validation_file = output_dir / "validation_split.csv"
+    if Path(file).resolve() in {train_file.resolve(), validation_file.resolve()}:
+        raise ValueError("The source CSV must not be one of the output files")
+    df_train, df_validation = split_validation_set(file, random_state=random_state)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    df_train.to_csv(train_file, index=False)
+    df_validation.to_csv(validation_file, index=False)
+    return train_file, validation_file
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Export the shared stratified split")
+    parser.add_argument("--export-split", action="store_true", help="write the raw train and validation CSVs")
+    parser.add_argument("--input", default=str(Path(__file__).resolve().parent / "data" / "train.csv"))
+    parser.add_argument("--output-dir", default=str(Path(__file__).resolve().parent / "data" / "splits"))
+    parser.add_argument("--random-state", type=int, default=12)
+    args = parser.parse_args()
+    if args.export_split:
+        for path in export_split(args.input, args.output_dir, args.random_state):
+            print(f"Saved: {path}")
+    else:
+        parser.print_help()
