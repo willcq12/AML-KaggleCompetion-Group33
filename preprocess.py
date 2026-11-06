@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import re
 from pathlib import Path
+from collections import Counter
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
@@ -90,6 +91,58 @@ def preprocess_data(featurization=tfidf_data, n=8000, random_state=12):
     X_train, X_validation, X_test = featurization(X_train, X_validation, X_test)
     return X_train, y_train, X_validation, y_validation, X_test
 
+def nn_data(X_train, X_validation, X_test, max_vocab=30000, max_length=512):
+    """Convert text into padded token-ID sequences for a CNN."""
+    if max_vocab < 2 or max_length < 1:
+        raise ValueError("max_vocab must be >= 2 and max_length >= 1")
+
+    # Tokenize cleaned text into words and punctuation.
+    pattern = re.compile(r"\w+|[^\w\s]", re.UNICODE)
+
+    def tokenize(texts):
+        return [
+            pattern.findall(clean_text(text))
+            for text in texts.fillna("")
+        ]
+
+    train_tokens = tokenize(X_train)
+
+    # Learn the vocabulary from training texts only.
+    counts = Counter(
+        token
+        for passage in train_tokens
+        for token in passage
+    )
+
+    # Reserve 0 for padding and 1 for unknown tokens.
+    vocabulary = {
+        token: token_id
+        for token_id, (token, _) in enumerate(
+            counts.most_common(max_vocab - 2),
+            start=2,
+        )
+    }
+
+    def encode(passages):
+        sequences = np.zeros(
+            (len(passages), max_length),
+            dtype=np.int64,
+        )
+
+        for row, tokens in enumerate(passages):
+            token_ids = [
+                vocabulary.get(token, 1)
+                for token in tokens[:max_length]
+            ]
+            sequences[row, :len(token_ids)] = token_ids
+
+        return sequences
+
+    return (
+        encode(train_tokens),
+        encode(tokenize(X_validation)),
+        encode(tokenize(X_test)),
+    )
 
 def _data_file(name):
     """Use the same repository data files regardless of working directory."""
