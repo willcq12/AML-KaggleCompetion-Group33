@@ -158,6 +158,54 @@ python -m unittest models.dave_extratrees.test_model -v
 
 The package's training entry point and model implementation are [`train.py`](train.py) and [`model.py`](model.py). They reuse the existing feature extractor without changing the team's shared preprocessing or other model implementations. This work belongs to `Dave-new-method-1`; publishing it does not merge it into `main`.
 
+## 8. Reproduce the generalization and error analysis (Q4.1–Q4.4)
+
+First run the training command in Section 7. Then replace `RUN_DIRECTORY` below
+with the timestamped output directory printed by that command:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 OPENBLAS_NUM_THREADS=2 OMP_NUM_THREADS=2 \
+python -m models.dave_extratrees.analyze_errors \
+  --run-dir RUN_DIRECTORY --data-dir data
+```
+
+The analysis reads the run's `metrics.json`, `recipe.json`, and
+`validation_predictions.csv`, plus the original `data/train.csv`. It verifies
+the retained configuration, source/data hashes, and exact validation IDs and
+labels. These predictions come from the **8,000-row benchmark fit**. The
+separate model fitted on all 10,000 rows is not used for error analysis.
+
+The analysis keeps the original model, features, and split fixed:
+
+- **Q4.1:** report training AUROC from the benchmark's saved metrics and
+  independently recompute validation AUROC from its saved predictions.
+- **Q4.2:** count tokens with the feature extractor's regular expression and
+  evaluate fixed bins of fewer than 150, 150–299, and at least 300 tokens.
+- **Q4.3:** predict AI at probability **>= 0.5**; identify false positives
+  (human predicted AI) and false negatives (AI predicted human). Select the
+  five highest-confidence mistakes of each type, breaking ties by ID.
+- **Q4.4:** summarize observable paragraph, line, and formatting patterns.
+  Explanations of why individual passages failed still require text inspection;
+  these are hypotheses, not established causal attributions.
+
+Each run writes a new `analysis.json` under
+`outputs/dave_extratrees/analysis/<UTC timestamp>/`. It contains aggregate
+statistics and the ten selected cases' IDs, probabilities, and numeric
+features, without original passages. No model fitting, tuning, or Kaggle upload
+occurs. `--output-dir` can select a different output parent directory.
+
+The expected results are recorded in
+[`generalization_reference.json`](generalization_reference.json): validation
+AUROC **0.9956835**, **19 false positives**, and **35 false negatives**. The
+length-bin counts are **395 / 1,404 / 201**, with AUROCs approximately
+**0.989915 / 0.995971 / 0.998298**, respectively. All 35 false negatives have
+one paragraph under the extractor's blank-line definition. All 640 validation
+passages with multiple paragraphs are AI-labeled and correctly classified;
+that subgroup therefore has no human examples and no defined within-group
+AUROC. The observed formatting correlation is not proof of causation. The
+historical validation set was reused, and the ten cases are selected examples,
+so neither should be presented as an unbiased independent test.
+
 ## Publication verification
 
 The package was run in a fresh local clone containing the committed repository, this selected package, and the three original input CSVs. No untracked experiment code, cached feature matrices, diagnostic prediction arrays, or previous model binaries were required. It reproduced the historical validation AUROC **0.9956835**; all 2,000 validation predictions and 3,000 submission predictions matched the retained version within an absolute tolerance of **1e-12**. The 5 package tests, 5 shared-split tests, and 58 existing NB tests passed. Exact comparison errors, hashes, versions, and scope are recorded in [`reproduction.json`](reproduction.json).
