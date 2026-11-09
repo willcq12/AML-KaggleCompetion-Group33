@@ -2,6 +2,10 @@ import numpy as np
 import pandas as pd
 import re
 from pathlib import Path
+from scipy.sparse import hstack
+from gensim.models import Word2Vec
+from sentence_transformers import SentenceTransformer
+
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import train_test_split
@@ -54,6 +58,25 @@ def clean_text(text):
     text = re.sub(r'\s+', ' ', text).strip()
     return text
 
+def tfidf_data_char(X_train, X_validation, X_test):
+    #tf-idf
+    vectorizer = TfidfVectorizer(
+        analyzer="char",
+        ngram_range=(2, 5),
+        max_features=20000
+    )
+
+    X_train_clean = X_train.apply(clean_text)
+    X_train_tfidf = vectorizer.fit_transform(X_train_clean)
+
+    X_validation_clean = X_validation.apply(clean_text)
+    X_validation_tfidf = vectorizer.transform(X_validation_clean)
+
+    X_test_clean = X_test.apply(clean_text)
+    X_test_tfidf = vectorizer.transform(X_test_clean)
+
+    return X_train_tfidf, X_validation_tfidf, X_test_tfidf
+
 def tfidf_data(X_train, X_validation, X_test):
     #tf-idf
     vectorizer = TfidfVectorizer(
@@ -74,6 +97,84 @@ def tfidf_data(X_train, X_validation, X_test):
     X_test_tfidf = vectorizer.transform(X_test_clean)
 
     return X_train_tfidf, X_validation_tfidf, X_test_tfidf
+
+
+def tfidf_data_combo(X_train, X_validation, X_test):
+
+    # Word-level TF-IDF
+    word_vectorizer = TfidfVectorizer(
+        ngram_range=(1, 2),
+        max_features=10000
+    )
+
+    # Character-level TF-IDF
+    char_vectorizer = TfidfVectorizer(
+        analyzer="char",
+        ngram_range=(2, 5),
+        max_features=20000
+    )
+
+    # Fit on training data
+    X_train_word = word_vectorizer.fit_transform(X_train)
+    X_train_char = char_vectorizer.fit_transform(X_train)
+
+    # Transform validation and test data
+    X_validation_word = word_vectorizer.transform(X_validation)
+    X_validation_char = char_vectorizer.transform(X_validation)
+
+    X_test_word = word_vectorizer.transform(X_test)
+    X_test_char = char_vectorizer.transform(X_test)
+
+    # Combine word and character features
+    X_train_combined = hstack([X_train_word, X_train_char])
+    X_validation_combined = hstack([X_validation_word, X_validation_char])
+    X_test_combined = hstack([X_test_word, X_test_char])
+
+    return X_train_combined, X_validation_combined, X_test_combined
+
+
+def word2vec(X_train, X_validation, X_test):
+
+    tokenized_train = [re.findall(r"\b\w+\b", text.lower()) for text in X_train]
+
+    model = Word2Vec(
+        sentences=tokenized_train,
+        vector_size=100,
+        window=5,
+        min_count=2,
+        workers=4,
+        seed=12
+    )
+
+    def document_vector(text):
+        words = re.findall(r"\b\w+\b", text.lower())
+
+        vectors = [
+            model.wv[word]
+            for word in words
+            if word in model.wv
+        ]
+
+        if len(vectors) == 0:
+            return np.zeros(100)
+
+        return np.mean(vectors, axis=0)
+
+    X_train = np.array([document_vector(text) for text in X_train])
+    X_validation = np.array([document_vector(text) for text in X_validation])
+    X_test = np.array([document_vector(text) for text in X_test])
+
+    return X_train, X_validation, X_test
+
+
+def sentence_embeddings(X_train, X_validation, X_test):
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    X_train = model.encode(X_train.tolist(), show_progress_bar=True)
+    X_validation = model.encode(X_validation.tolist(), show_progress_bar=True)
+    X_test = model.encode(X_test.tolist(), show_progress_bar=True)
+
+    return X_train, X_validation, X_test
 
 
 def preprocess_data(featurization=tfidf_data, n=8000, random_state=12):
