@@ -25,7 +25,13 @@ from sklearn.metrics import log_loss, roc_auc_score
 from sklearn.model_selection import StratifiedGroupKFold, train_test_split
 from sklearn.preprocessing import normalize
 
-from .neural import CNNConfig, choose_epoch, load_predictor, refit, validate_vector_file
+from .neural import (
+    CNNConfig,
+    load_predictor,
+    refit,
+    train_with_early_stopping,
+    validate_vector_file,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -155,23 +161,6 @@ def topic_scores(labels, probabilities, groups, minimum_per_class=20):
     return pd.DataFrame(rows)
 
 
-def inner_split(labels, groups, protocol, seed):
-    """Select stopping rows from the outer training set, never its holdout."""
-    labels, groups = np.asarray(labels), np.asarray(groups)
-    indices = np.arange(len(labels))
-    if protocol == "random":
-        train, stop = train_test_split(indices, test_size=0.2, stratify=labels, random_state=seed)
-    else:
-        folds = min(5, len(np.unique(groups)))
-        if folds < 2:
-            raise ValueError("Need at least two training topics for inner early stopping")
-        splitter = StratifiedGroupKFold(n_splits=folds, shuffle=True, random_state=seed)
-        train, stop = next(splitter.split(indices, labels, groups))
-    if len(np.unique(labels[train])) != 2 or len(np.unique(labels[stop])) != 2:
-        raise ValueError("Inner early-stopping split needs both labels")
-    return train, stop
-
-
 def config_from_args(args, embedding_mode="random"):
     return CNNConfig(
         max_vocab=args.max_vocab, max_length=args.max_length,
@@ -224,27 +213,25 @@ def benchmark(args):
         "splits_sha256": file_hash(args.output_dir / "splits.csv"),
         "models": args.models, "embedding_modes": args.embedding_modes,
         "folds": folds, "protocol": args.protocol,
-        "epoch_selection": "inner validation only; refit outer training set before outer evaluation",
+        "epoch_selection": "early stopping on the fixed validation partition; no refit",
     }, indent=2) + "\n")
     for protocol, fold, validation in evaluations:
         outer_train = frame.loc[~validation].reset_index(drop=True)
-        groups = splits.topic_group.to_numpy()[~validation]
-        inner_train, inner_stop = inner_split(outer_train.label, groups, protocol, args.seed)
         for name, embedding_mode in product(args.models, args.embedding_modes):
             config = configs[embedding_mode]
             print(f"Training {name}/{embedding_mode}: {protocol}, fold {fold}, {int((~validation).sum())} rows", flush=True)
             model_dir = destination / f"{protocol}_{fold}_{name}_{embedding_mode}"
             model_dir.mkdir(parents=True, exist_ok=True)
-            inner_roles = np.full(len(outer_train), "train", dtype=object)
-            inner_roles[inner_stop] = "stopping"
-            pd.DataFrame({"id": outer_train.id, "role": inner_roles}).to_csv(model_dir / "inner_split.csv", index=False)
             training_started = perf_counter()
-            selected_epoch = choose_epoch(
-                outer_train.text.iloc[inner_train], outer_train.label.iloc[inner_train],
-                outer_train.text.iloc[inner_stop], outer_train.label.iloc[inner_stop],
-                name, config, model_dir,
+            predictor, selected_epoch = train_with_early_stopping(
+                outer_train.text,
+                outer_train.label,
+                frame.text[validation],
+                frame.label[validation],
+                name,
+                config,
+                model_dir,
             )
-            predictor = refit(outer_train.text, outer_train.label, name, config, selected_epoch, model_dir)
             training_seconds = perf_counter() - training_started
             training_probabilities = predictor.predict(outer_train.text)
             probabilities = predictor.predict(frame.text[validation])

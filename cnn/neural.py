@@ -243,42 +243,80 @@ def load_predictor(path, device="auto"):
     return CNNPredictor(model, encoder, config, selected_device)
 
 
-def choose_epoch(train_text, train_labels, stopping_text, stopping_labels, mode, config, destination):
-    """Use only an inner validation set to choose the number of training epochs."""
-    if len(np.unique(stopping_labels)) != 2:
+def train_with_early_stopping(
+    train_text,
+    train_labels,
+    validation_text,
+    validation_labels,
+    mode,
+    config,
+    destination,
+):
+    """Train on the training partition and keep the best validation checkpoint."""
+    if len(np.unique(validation_labels)) != 2:
         raise ValueError("Early stopping requires both labels")
     model, encoder, device = initialize(train_text, mode, config)
     train_loader = make_loader(encoder.encode(train_text), train_labels, config, shuffle=True)
-    stopping_loader = make_loader(encoder.encode(stopping_text), stopping_labels, config)
+    validation_loader = make_loader(
+        encoder.encode(validation_text), validation_labels, config
+    )
     criterion = nn.BCEWithLogitsLoss()
     optimizer = torch.optim.AdamW(
         model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay,
     )
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
-    (destination / "inner_embedding_report.json").write_text(json.dumps(model.embedding_report, indent=2) + "\n")
+    (destination / "embedding_report.json").write_text(
+        json.dumps(model.embedding_report, indent=2) + "\n"
+    )
     best_auc, best_epoch, stale, history = -np.inf, 0, 0, []
-    print(f"  Inner selection on {device}: train={len(train_text)}, stop={len(stopping_text)}", flush=True)
+    print(
+        f"  Training on {device}: train={len(train_text)}, "
+        f"validation={len(validation_text)}",
+        flush=True,
+    )
     for epoch in range(1, config.epochs + 1):
         train_loss = run_epoch(model, train_loader, criterion, device, optimizer)
         val_loss, probabilities = run_epoch(
-            model, stopping_loader, criterion, device, return_probabilities=True,
+            model,
+            validation_loader,
+            criterion,
+            device,
+            return_probabilities=True,
         )
         if not np.isfinite([train_loss, val_loss]).all():
             raise RuntimeError("Training produced a non-finite loss")
-        auc = float(roc_auc_score(stopping_labels, probabilities))
-        history.append({"epoch": epoch, "train_loss": train_loss, "stopping_loss": val_loss, "stopping_auroc": auc})
+        auc = float(roc_auc_score(validation_labels, probabilities))
+        history.append(
+            {
+                "epoch": epoch,
+                "train_loss": train_loss,
+                "validation_loss": val_loss,
+                "validation_auroc": auc,
+            }
+        )
         pd.DataFrame(history).to_csv(destination / "history.csv", index=False)
-        print(f"  Epoch {epoch:02d}: train={train_loss:.4f}, stopping AUROC={auc:.4f}", flush=True)
+        print(
+            f"  Epoch {epoch:02d}: train loss={train_loss:.4f}, "
+            f"validation AUROC={auc:.4f}",
+            flush=True,
+        )
         if auc > best_auc:
             best_auc, best_epoch, stale = auc, epoch, 0
-            save_checkpoint(destination / "inner_best.pt", model, encoder, config, epoch, stopping_auroc=auc)
+            save_checkpoint(
+                destination / "model.pt",
+                model,
+                encoder,
+                config,
+                epoch,
+                validation_auroc=auc,
+            )
         else:
             stale += 1
             if stale >= config.patience:
                 print(f"  Early stopping; selected epoch {best_epoch}", flush=True)
                 break
-    return best_epoch
+    return load_predictor(destination / "model.pt", device=config.device), best_epoch
 
 
 def refit(texts, labels, mode, config, epochs, destination):

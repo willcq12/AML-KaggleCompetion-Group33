@@ -63,10 +63,11 @@ To run the submitted configuration on the required fixed random holdout:
 venv/bin/python -u -m cnn benchmark
 ```
 
-This performs inner epoch selection and then refits the 8,000-row training
-partition before evaluating the untouched 2,000 rows. The submitted run selected
-12 epochs; the selection cap remains 30 with patience 3, matching that run's
-procedure. To compare raw and cleaned text explicitly, add
+This trains on 8,000 rows and monitors AUROC on the fixed 2,000-row validation
+partition after each epoch. It saves each new best checkpoint and stops after
+three epochs without improvement. The validation score therefore participates
+in epoch selection; the hidden Kaggle test set remains the final evaluation.
+To compare raw and cleaned text explicitly, add
 `--models cnn_raw cnn_clean`.
 
 For a supplementary generalization experiment, run the raw CNN on a topic holdout:
@@ -83,14 +84,10 @@ comparisons. Skip repeating the random split with `--protocol topic`:
 venv/bin/python -u -m cnn benchmark --protocol topic --fold all
 ```
 
-Each outer evaluation first divides its training rows into an inner training
-and early-stopping set. For topic evaluations, the inner split also holds out
-entire topic groups. The CNN selects its best epoch by inner AUROC, stopping
-after three epochs without improvement. It saves each new best checkpoint
-immediately. It then retrains from scratch on all outer-training rows for that
-selected epoch count, and evaluates the outer holdout once. The outer holdout
-never selects epochs or learns vocabulary. This adds a selection fit and a
-refit per evaluation, but keeps the reported holdout separate from early stopping.
+Topic evaluations use the selected topic fold directly for early stopping and
+reporting. The remaining topic folds supply the training rows. As with the
+random benchmark, the saved model is the checkpoint with the highest validation
+AUROC before patience is exhausted.
 
 Use `--epochs 15 --patience 3` to cap the selection phase at 15 epochs. Other
 options include `--max-length`, `--max-vocab`, `--batch-size`, `--learning-rate`,
@@ -108,8 +105,8 @@ Results go into a new `cnn/outputs/cnn_benchmark_<protocol>_<fold>_<timestamp>/`
 - `topic_metrics.csv`: performance and class counts for each held-out topic.
 - `run_metadata.json`: split fingerprint, versions, and model settings.
 
-Each model/evaluation subdirectory also contains `inner_split.csv`,
-`history.csv`, `inner_best.pt`, `refit_history.csv`, and `model.pt`. Checkpoints
+Each model/evaluation subdirectory also contains `history.csv`,
+`embedding_report.json`, and `model.pt`. Checkpoints
 include weights, token vocabulary, preprocessing mode, and model settings.
 Metrics and predictions are saved after every completed evaluation, so results
 from earlier evaluations survive an interrupted run. Training cannot resume an
@@ -172,7 +169,8 @@ venv/bin/python -u -m cnn train-full --epochs 12
 The defaults match the CNN that scored approximately 0.94 on the public
 leaderboard when trained on 8,000 rows: raw text, random 100-dimensional
 embeddings, 768-token sequences, and seed 12. The 12 epochs come from that
-configuration's inner selection run. This command trains a fresh network on
+configuration's earlier validation run. Replace it with the best epoch from
+the benchmark you intend to use. This command trains a fresh network on
 every row of `data/train.csv` for exactly 12 epochs, then predicts the 3,000
 passages in `data/test.csv`. It does not use the test passages for training and
 does not require prepared splits.
@@ -245,9 +243,9 @@ venv/bin/python -u -m cnn benchmark \
 All three use the same dimensions, splits, model capacity, optimizer learning
 rate, and seed. The random baseline must also use 100 dimensions; comparing
 pretrained 100-dimensional vectors against the old 128-dimensional baseline
-would change two factors at once. Each treatment independently selects its
-epoch count using the inner stopping split, then refits the outer training rows.
-This command performs three selection fits and three refits. For an additional
+would change two factors at once. Each treatment trains on the same training
+partition and independently stops according to the same validation partition.
+For an additional
 topic stress test, replace `--protocol random` with `--protocol topic --fold all`.
 
 The file reader loads vectors only for tokens in that fit's training vocabulary.
@@ -261,8 +259,8 @@ Tokens without a vector, including some punctuation and newline tokens, keep
 their seeded random initialization. They are also fixed in the frozen treatment.
 Padding stays zero. The code prints vocabulary coverage and records exact and
 lowercase match counts, vector-file SHA-256, and dimensions in
-`inner_embedding_report.json` and `embedding_report.json` alongside the
-checkpoints. This is vocabulary coverage, not the percentage of running text
+`embedding_report.json` alongside the checkpoint. This is vocabulary coverage,
+not the percentage of running text
 tokens covered. A dimension mismatch fails before the benchmark starts training.
 
 Scores in `metrics.csv` and `summary.csv` identify both `model` and
