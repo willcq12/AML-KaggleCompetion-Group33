@@ -25,3 +25,24 @@ python3 preprocess.py --export-split
 ```
 
 This writes `data/splits/train_split.csv` and `data/splits/validation_split.csv` (with the original `id`, `text`, and `label` columns) without changing `data/train.csv`. These are raw texts, not the TF-IDF feature matrices. `preprocess_data()` recomputes the split from `data/train.csv` and the chosen seed; it does not read these exported files. Compare the IDs to verify agreement. The `data/` directory is ignored for newly generated files, so the exported CSVs will not automatically be shared through Git. The `--input`, `--output-dir`, and `--random-state` options can be used to select another source, destination, or seed; teammates should agree on the same settings.
+
+## CNN
+
+CNN models, training, experiment code, and tests live in [`cnn/`](cnn/README.md).
+Run commands from the repository root:
+
+```sh
+venv/bin/python -u -m cnn --help
+```
+
+See the [CNN instructions](cnn/README.md) for training, evaluation, pretrained
+embeddings, and generating submissions from saved checkpoints. Input datasets
+and downloaded embeddings remain in `data/`; CNN-generated results and
+checkpoints are stored in `cnn/outputs/` (ignored by Git).
+
+After selecting a configuration on the fixed validation split, refit it on all
+10,000 labeled passages and generate test predictions with:
+
+```sh
+venv/bin/python -u -m cnn train-full --epochs 12
+```
