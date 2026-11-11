@@ -27,12 +27,13 @@ def unlabel_data(df):
     y = df['label']
     return X, y
 
-def clean_text(text):
-    #lowercase all text
-    text = text.lower()
+def clean_text(text, lowercase=True):
+    # Lowercase by default; optionally preserve capitalization.
+    if lowercase:
+        text = text.lower()
 
     #remove urls
-    text = re.sub(r'https?://\S+|www\.\S+', '', text)
+    text = re.sub(r'https?://\S+|www\.\S+', '', text, flags=re.IGNORECASE)
 
     # Remove Unix-style paths
     text = re.sub(r'(/[^\s]+)+', ' FILEPATH ', text)
