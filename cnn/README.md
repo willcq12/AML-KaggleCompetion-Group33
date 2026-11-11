@@ -7,7 +7,6 @@ cnn/
   model.py          # TextCNN and the shared epoch/prediction functions
   neural.py         # Tokenization, embeddings, training, and checkpoints
   generalization.py # Splits, experiment runner, and submission generation
-  tests/            # CNN tests
 ```
 
 Run commands from the repository root using `python -m cnn`. Input datasets and
@@ -20,12 +19,6 @@ The default experiment matches the submitted configuration: raw text with
 newline tokens, 768-token sequences, 100-dimensional random embeddings, and the
 fixed stratified 8,000/2,000 split. Model settings live in `neural.CNNConfig`;
 `model.py` contains no separate training program or conflicting settings.
-
-Run all repository tests without training any models:
-
-```sh
-venv/bin/python -m unittest discover -v
-```
 
 ## Neural generalization benchmark
 
@@ -107,8 +100,10 @@ vary across devices and library versions.
 
 Results go into a new `cnn/outputs/cnn_benchmark_<protocol>_<fold>_<timestamp>/`:
 
-- `metrics.csv`: AUROC, log loss, selected epoch, and topic summaries for each evaluation.
-- `summary.csv`: mean/minimum fold AUROC and median selected epoch for each model/protocol.
+- `metrics.csv`: training/validation AUROC, training time, log loss, selected epoch,
+  and topic summaries for each evaluation.
+- `summary.csv`: mean training/validation AUROC, mean training time, minimum fold
+  AUROC, and median selected epoch for each model/protocol.
 - `validation_predictions.csv`: probabilities and original IDs for error analysis.
 - `topic_metrics.csv`: performance and class counts for each held-out topic.
 - `run_metadata.json`: split fingerprint, versions, and model settings.
@@ -194,6 +189,8 @@ Upload that CSV to Kaggle to measure the full-data model's public AUROC. There
 is no held-out validation AUROC for this fit; a training-set score would not
 establish which model generalizes best. Required report comparisons still use
 the fixed 8,000/2,000 benchmark. The command does not upload automatically.
+The full-data training duration is saved as `training_seconds` in
+`run_metadata.json` and the submission metadata.
 
 To refit a different selected configuration, use `--model cnn_clean` or
 `--embedding-mode frozen|finetune` with the corresponding vector options. For

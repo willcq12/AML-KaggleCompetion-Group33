@@ -13,6 +13,7 @@ import hashlib
 from itertools import product
 import json
 from pathlib import Path
+from time import perf_counter
 
 import numpy as np
 import pandas as pd
@@ -191,6 +192,8 @@ def write_results(destination, metrics, predictions, group_metrics):
         mean_auroc=("auroc", "mean"), std_auroc=("auroc", "std"),
         minimum_fold_auroc=("auroc", "min"), evaluations=("auroc", "size"),
         median_selected_epoch=("selected_epoch", "median"),
+        mean_training_auroc=("training_auroc", "mean"),
+        mean_training_seconds=("training_seconds", "mean"),
     ).reset_index()
     summary.to_csv(destination / "summary.csv", index=False)
     return summary
@@ -235,12 +238,15 @@ def benchmark(args):
             inner_roles = np.full(len(outer_train), "train", dtype=object)
             inner_roles[inner_stop] = "stopping"
             pd.DataFrame({"id": outer_train.id, "role": inner_roles}).to_csv(model_dir / "inner_split.csv", index=False)
+            training_started = perf_counter()
             selected_epoch = choose_epoch(
                 outer_train.text.iloc[inner_train], outer_train.label.iloc[inner_train],
                 outer_train.text.iloc[inner_stop], outer_train.label.iloc[inner_stop],
                 name, config, model_dir,
             )
             predictor = refit(outer_train.text, outer_train.label, name, config, selected_epoch, model_dir)
+            training_seconds = perf_counter() - training_started
+            training_probabilities = predictor.predict(outer_train.text)
             probabilities = predictor.predict(frame.text[validation])
             labels = frame.label[validation]
             by_topic = topic_scores(labels, probabilities, splits.topic_group.to_numpy()[validation])
@@ -248,6 +254,8 @@ def benchmark(args):
             row = {
                 "model": name, "embedding_mode": embedding_mode, "protocol": protocol, "fold": fold,
                 "training_rows": int((~validation).sum()), "validation_rows": int(validation.sum()),
+                "training_auroc": roc_auc_score(outer_train.label, training_probabilities),
+                "training_seconds": training_seconds,
                 "auroc": roc_auc_score(labels, probabilities),
                 "selected_epoch": selected_epoch,
                 "log_loss": log_loss(labels, probabilities, labels=[0, 1]),
@@ -263,7 +271,12 @@ def benchmark(args):
             group_metrics.append(by_topic.assign(model=name, embedding_mode=embedding_mode, protocol=protocol, fold=fold))
             # Preserve completed evaluations if the terminal run is interrupted.
             summary = write_results(destination, metrics, predictions, group_metrics)
-            print(f"  AUROC={row['auroc']:.4f}, topic macro={row['topic_macro_auroc']:.4f}", flush=True)
+            print(
+                f"  Train AUROC={row['training_auroc']:.4f}, "
+                f"validation AUROC={row['auroc']:.4f}, "
+                f"training time={row['training_seconds']:.1f}s",
+                flush=True,
+            )
             del predictor
     print(summary.to_string(index=False))
     print(f"Saved results to {destination}")
@@ -325,7 +338,10 @@ def train_full(args):
     (destination / "run_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     train[["id"]].to_csv(destination / "training_ids.csv", index=False)
     print(f"Training {args.model}/{args.embedding_mode} on all {len(train)} labeled rows for {args.epochs} epochs", flush=True)
+    training_started = perf_counter()
     predictor = refit(train.text, train.label, args.model, config, args.epochs, destination)
+    metadata["training_seconds"] = perf_counter() - training_started
+    (destination / "run_metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     return save_submission(predictor, test, args.test, destination / "model.pt", destination, metadata)
 
 
