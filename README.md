@@ -1,5 +1,13 @@
 # AML-KaggleCompetion-Group33
 
+## Dave's current submitted method
+
+The retained model on `Dave-new-method-1` uses **145 handcrafted text-style features and 800 ExtraTrees decision trees**. Dave reported a **+0.004 Kaggle public AUROC** improvement for this version. Its fixed 8,000/2,000 local benchmark AUROC is **0.9956835**; these are different measurements.
+
+Start with the [complete English method and reproduction guide](models/dave_extratrees/README.md). It covers data handling, text processing, feature definitions, model training, validation, and final submission generation. The selected implementation is in [`models/dave_extratrees/`](models/dave_extratrees/); it has a direct training command and does not require local experiment caches.
+
+The shared preprocessing workflow below remains available for the team's other models. Dave's current method uses its own raw-text statistical features instead of the shared TF-IDF representation.
+
 ## Preprocessing
 
 preprocess.py contains all pre processing functions. To preprocess data for model training and testing call
