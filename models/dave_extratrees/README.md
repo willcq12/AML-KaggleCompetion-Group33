@@ -6,6 +6,10 @@ Dave reported that this version improved the Kaggle public AUROC by **0.004** ov
 
 This is the retained ExtraTrees method. The earlier MultinomialNB/TF-IDF method is a separate experiment. The code here runs the fixed selected recipe; it does not run a new hyperparameter search.
 
+The report's training-size and unlabeled-data experiments are organized in
+[`q4_q5/`](q4_q5/README.md). They reuse this recipe and the fixed 2,000-row
+validation set, with results under `outputs/q4_q5/`.
+
 ## 1. What data do we use?
 
 | File | Role in this method |
