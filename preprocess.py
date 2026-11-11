@@ -5,6 +5,7 @@ from pathlib import Path
 from scipy.sparse import hstack
 from gensim.models import Word2Vec
 from sentence_transformers import SentenceTransformer
+from models.text_generalization.style_search import StyleFeatures
 
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -176,6 +177,33 @@ def sentence_embeddings(X_train, X_validation, X_test):
 
     return X_train, X_validation, X_test
 
+def dave_145_stylization(X_train, X_validation, X_test):
+    # Implement the specific stylization logic here
+
+    vectorizer = StyleFeatures()
+
+    X_train_145_style = vectorizer.fit_transform(X_train)
+
+    X_validation_145_style = vectorizer.transform(X_validation)
+
+    X_test_145_style = vectorizer.transform(X_test)
+
+    return X_train_145_style, X_validation_145_style, X_test_145_style
+
+
+def dave_145_stylization_full_data(X_train, X_test):
+    # Implement the specific stylization logic here
+
+    vectorizer = StyleFeatures()
+
+    X_train_145_style = vectorizer.fit_transform(X_train)
+
+
+    X_test_145_style = vectorizer.transform(X_test)
+
+    return X_train_145_style, X_test_145_style
+
+
 
 def preprocess_data(featurization=tfidf_data, n=8000, random_state=12):
     
@@ -191,6 +219,13 @@ def preprocess_data(featurization=tfidf_data, n=8000, random_state=12):
     X_train, X_validation, X_test = featurization(X_train, X_validation, X_test)
     return X_train, y_train, X_validation, y_validation, X_test
 
+def process_full_data(featurization=dave_145_stylization_full_data, random_state=12):
+    df_train = pd.read_csv(_data_file("train.csv"))
+    X_train, y_train = unlabel_data(df_train)
+
+    X_test = pd.read_csv(_data_file("test.csv"))["text"]
+    X_train, X_test = featurization(X_train, X_test)
+    return X_train, y_train, X_test
 
 def _data_file(name):
     """Use the same repository data files regardless of working directory."""
