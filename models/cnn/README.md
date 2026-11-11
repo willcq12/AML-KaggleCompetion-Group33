@@ -1,20 +1,20 @@
 # CNN experiments
 
-All CNN source code, documentation, and tests live in this package:
+All CNN source code and documentation live in this package:
 
 ```text
-cnn/
+models/cnn/
   model.py          # TextCNN and the shared epoch/prediction functions
   neural.py         # Tokenization, embeddings, training, and checkpoints
   generalization.py # Splits, experiment runner, and submission generation
 ```
 
-Run commands from the repository root using `python -m cnn`. Input datasets and
+Run commands from the repository root using `python -m models.cnn`. Input datasets and
 downloaded embeddings stay in `data/`. All CNN-generated splits, checkpoints,
-metrics, histories, analysis reports, and submission CSVs go into `cnn/outputs/`
+metrics, histories, analysis reports, and submission CSVs go into `models/cnn/outputs/`
 by default. This output directory is ignored by Git; `--output-dir` can override
-it. Older standalone histories/submissions are in `cnn/outputs/legacy/`, and
-initial review results are in `cnn/outputs/review/`.
+it. Older standalone histories/submissions are in `models/cnn/outputs/legacy/`, and
+initial review results are in `models/cnn/outputs/review/`.
 The default experiment matches the submitted configuration: raw text with
 newline tokens, 768-token sequences, 100-dimensional random embeddings, and the
 fixed stratified 8,000/2,000 split. Model settings live in `neural.CNNConfig`;
@@ -43,10 +43,10 @@ instead of `venv/bin/python` if your environment is already activated.
 First, create and inspect the fixed splits:
 
 ```sh
-venv/bin/python -u -m cnn prepare
+venv/bin/python -u -m models.cnn prepare
 ```
 
-This writes `cnn/outputs/splits.csv`, `topics.csv`, and
+This writes `models/cnn/outputs/splits.csv`, `topics.csv`, and
 `split_metadata.json`. The random split uses the same stratification, seed, and
 validation IDs as `preprocess.py`. The second protocol clusters texts into 25
 topic proxies and assigns entire clusters to five held-out folds. Inspect the
@@ -60,7 +60,7 @@ training fold.
 To run the submitted configuration on the required fixed random holdout:
 
 ```sh
-venv/bin/python -u -m cnn benchmark
+venv/bin/python -u -m models.cnn benchmark
 ```
 
 This trains on 8,000 rows and monitors AUROC on the fixed 2,000-row validation
@@ -73,7 +73,7 @@ To compare raw and cleaned text explicitly, add
 For a supplementary generalization experiment, run the raw CNN on a topic holdout:
 
 ```sh
-venv/bin/python -u -m cnn benchmark --protocol topic --fold 0 --models cnn_raw
+venv/bin/python -u -m models.cnn benchmark --protocol topic --fold 0 --models cnn_raw
 ```
 
 To extend that supplementary experiment, evaluate all five topic folds. These
@@ -81,7 +81,7 @@ use different validation rows and do not replace the required fixed-holdout
 comparisons. Skip repeating the random split with `--protocol topic`:
 
 ```sh
-venv/bin/python -u -m cnn benchmark --protocol topic --fold all
+venv/bin/python -u -m models.cnn benchmark --protocol topic --fold all
 ```
 
 Topic evaluations use the selected topic fold directly for early stopping and
@@ -95,7 +95,7 @@ options include `--max-length`, `--max-vocab`, `--batch-size`, `--learning-rate`
 CUDA, then Apple MPS, then CPU. Seeds are set for each fit; results can still
 vary across devices and library versions.
 
-Results go into a new `cnn/outputs/cnn_benchmark_<protocol>_<fold>_<timestamp>/`:
+Results go into a new `models/cnn/outputs/cnn_benchmark_<protocol>_<fold>_<timestamp>/`:
 
 - `metrics.csv`: training/validation AUROC, training time, log loss, selected epoch,
   and topic summaries for each evaluation.
@@ -137,8 +137,8 @@ outer-training rows and excludes the shared 2,000-row holdout. Use the path from
 the desired benchmark run:
 
 ```sh
-venv/bin/python -u -m cnn submit \
-  --checkpoint "cnn/outputs/<your-benchmark-run>/random_-1_cnn_raw_random/model.pt"
+venv/bin/python -u -m models.cnn submit \
+  --checkpoint "models/cnn/outputs/<your-benchmark-run>/random_-1_cnn_raw_random/model.pt"
 ```
 
 Replace `<your-benchmark-run>` with the actual directory name. This command is
@@ -146,7 +146,7 @@ inference only: it loads saved weights, vocabulary, preprocessing, and dimension
 it does not read labeled training data or run an optimizer. Full-data refitting
 has its own explicit `train-full` command below.
 
-This produces a new `cnn/outputs/cnn_prediction_cnn_raw_random_<timestamp>/`
+This produces a new `models/cnn/outputs/cnn_prediction_cnn_raw_random_<timestamp>/`
 directory containing `submission_cnn_raw.csv` and metadata recording checkpoint
 and test-file fingerprints. Predictions use `id,label` columns, original test-row
 order, and AI probabilities. The script does not upload to Kaggle.
@@ -163,7 +163,7 @@ Use the fixed-holdout benchmark to compare configurations and choose an epoch
 count first. Then refit the selected model on all 10,000 labeled passages:
 
 ```sh
-venv/bin/python -u -m cnn train-full --epochs 12
+venv/bin/python -u -m models.cnn train-full --epochs 12
 ```
 
 The defaults match the CNN that scored approximately 0.94 on the public
@@ -175,7 +175,7 @@ every row of `data/train.csv` for exactly 12 epochs, then predicts the 3,000
 passages in `data/test.csv`. It does not use the test passages for training and
 does not require prepared splits.
 
-A new `cnn/outputs/cnn_full_cnn_raw_random_<timestamp>/` directory contains:
+A new `models/cnn/outputs/cnn_full_cnn_raw_random_<timestamp>/` directory contains:
 
 - `model.pt`: fitted weights, vocabulary, and configuration.
 - `refit_history.csv`: training loss by epoch.
@@ -195,7 +195,7 @@ To refit a different selected configuration, use `--model cnn_clean` or
 example, to train the fine-tuned GloVe variant for an already selected 8 epochs:
 
 ```sh
-venv/bin/python -u -m cnn train-full \
+venv/bin/python -u -m models.cnn train-full \
   --model cnn_raw --embedding-mode finetune --epochs 8 \
   --embedding-dim 100 --embeddings data/embeddings/glove.6B.100d.txt \
   --lowercase-embedding-fallback
@@ -223,12 +223,12 @@ curl -fL --retry 3 -o data/embeddings/glove.6B.zip https://downloads.cs.stanford
 unzip -n data/embeddings/glove.6B.zip glove.6B.100d.txt -d data/embeddings
 ```
 
-Prepare splits once with `python -m cnn prepare` if needed. Then compare all
+Prepare splits once with `python -m models.cnn prepare` if needed. Then compare all
 three embedding treatments on the fixed random holdout, using only raw text initially to
 avoid mixing the embedding and cleaning experiments:
 
 ```sh
-venv/bin/python -u -m cnn benchmark \
+venv/bin/python -u -m models.cnn benchmark \
   --protocol random --models cnn_raw \
   --embedding-dim 100 \
   --embeddings data/embeddings/glove.6B.100d.txt \
@@ -272,9 +272,9 @@ To generate a submission from a pretrained benchmark model, pass its saved
 checkpoint. The treatment and dimensions are loaded from that checkpoint:
 
 ```sh
-venv/bin/python -u -m cnn submit \
-  --checkpoint "cnn/outputs/<your-benchmark-run>/random_-1_cnn_raw_finetune/model.pt"
+venv/bin/python -u -m models.cnn submit \
+  --checkpoint "models/cnn/outputs/<your-benchmark-run>/random_-1_cnn_raw_finetune/model.pt"
 ```
 
 Saved checkpoints contain the learned embeddings and vocabulary. Loading them
-with `cnn.neural.load_predictor(path)` does not require the original GloVe file.
+with `models.cnn.neural.load_predictor(path)` does not require the original GloVe file.

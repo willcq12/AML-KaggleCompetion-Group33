@@ -34,7 +34,7 @@ from .neural import (
 )
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = Path(__file__).resolve().parent / "outputs"
 MODEL_NAMES = ("cnn_raw", "cnn_clean")
 
