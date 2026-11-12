@@ -1,8 +1,19 @@
+import sys
+from pathlib import Path
+from time import perf_counter
+
+
+ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+
 from sklearn.ensemble import RandomForestClassifier
 import numpy as np
 import matplotlib.pyplot as plt
-from preprocess import preprocess_data, tfidf_data_char, tfidf_data_combo, word2vec, sentence_embeddings
+from preprocess import preprocess_data, tfidf_data_char, tfidf_data_combo, word2vec, sentence_embeddings, dave_145_stylization
 from scorer import create_kaggle_submission, evaluate_model
+
 
 def random_forest(X_train, y_train, random_state=12, max_depth=None, n_estimators=100):
     model = RandomForestClassifier(
@@ -59,7 +70,12 @@ def random_forest(X_train, y_train, random_state=12, max_depth=None, n_estimator
 # plt.show()
 
 
-X_train, y_train, X_validation, y_validation, X_test = preprocess_data(featurization=tfidf_data_combo)
+X_train, y_train, X_validation, y_validation, X_test = preprocess_data(featurization=dave_145_stylization)
+start = perf_counter()
 model = random_forest(X_train, y_train, random_state=12)
+print(f"Model training: {perf_counter() - start:.2f} seconds")
+print("train")
+evaluate_model(model, X_train, y_train)
+print("validation")
 evaluate_model(model, X_validation, y_validation)
-create_kaggle_submission(model, X_test, "submission_random_forest_tfidf_combo.csv")
+# create_kaggle_submission(model, X_test, "submission_random_forest_tfidf_combo.csv")

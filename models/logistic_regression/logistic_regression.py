@@ -136,5 +136,9 @@ start = perf_counter()
 model = logistic_regression(X_train, y_train)
 print(f"Model training: {perf_counter() - start:.2f} seconds")
 
+print("train")
+evaluate_model(model, X_train, y_train)
+
+print("validation")
 evaluate_model(model, X_validation, y_validation)
 # create_kaggle_submission(model, X_test, "submission_logistic_regression_tfidfcombo_minlm.csv")

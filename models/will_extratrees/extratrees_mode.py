@@ -28,14 +28,14 @@ def extra_trees(X_train, y_train):
     #     n_jobs=-1
     # )
     model_et = ExtraTreesClassifier(
-        n_estimators=800,
-        max_features=0.8,
-        min_samples_leaf=2,
+        n_estimators=250,
+        # max_features=0.8,
+        min_samples_leaf=1,
         max_depth=None,
         random_state=12,
-        n_jobs=2,
-        bootstrap=True,
-        max_samples=0.8,
+        n_jobs=-1,
+        # bootstrap=True,
+        # max_samples=0.8,
         class_weight='balanced_subsample'
     )
     

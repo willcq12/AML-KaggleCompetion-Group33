@@ -26,9 +26,13 @@ def svm(X_train, y_train, random_state=12):
     return model
 
 
-X_train, y_train, X_validation, y_validation, X_test = preprocess_data(featurization= dave_145_stylization)
+X_train, y_train, X_validation, y_validation, X_test = preprocess_data(featurization= tfidf_data_combo)
 start = perf_counter()
 model = svm(X_train, y_train, random_state=12)
 print(f"Model training: {perf_counter() - start:.2f} seconds")
+print(f"Model training: {perf_counter() - start:.2f} seconds")
+print("train")
+evaluate_model(model, X_train, y_train)
+print("validation")
 evaluate_model(model, X_validation, y_validation)
 # create_kaggle_submission(model, X_test, "submission_svm.csv")

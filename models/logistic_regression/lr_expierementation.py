@@ -163,6 +163,9 @@ def save_result(
         # Logistic Regression parameters
         "C": model_params.get("C"),
         "Solver": model_params.get("solver"),
+        "Penalty": model_params.get("penalty"),
+        "Class_Weight": model_params.get("class_weight"),
+        "Fit_Intercept": model_params.get("fit_intercept"),
         "Max_Iterations": model_params.get("max_iter"),
 
         # Additional model parameters
@@ -189,13 +192,21 @@ def evaluate_lr(
     Xva,
     C,
     feature_config,
-    experiment_name
+    experiment_name,
+    solver="liblinear",
+    penalty="l2",
+    class_weight=None,
+    fit_intercept=True,
+    max_iter=1500
 ):
 
     model = LogisticRegression(
         C=C,
-        max_iter=1500,
-        solver="liblinear",
+        max_iter=max_iter,
+        solver=solver,
+        penalty=penalty,
+        class_weight=class_weight,
+        fit_intercept=fit_intercept,
         random_state=args.seed
     )
 
@@ -209,8 +220,11 @@ def evaluate_lr(
         probabilities=probabilities,
         model_params={
             "C": C,
-            "solver": "liblinear",
-            "max_iter": 1500,
+            "solver": solver,
+            "penalty": penalty,
+            "class_weight": class_weight,
+            "fit_intercept": fit_intercept,
+            "max_iter": max_iter,
             "random_state": args.seed
         },
         feature_config=feature_config
@@ -620,8 +634,8 @@ if not args.skip_minilm:
 
 print("\n========== LOGISTIC REGRESSION C TUNING ==========")
 
-best_c = None
-best_c_auc = -1
+best_lr_params = None
+best_lr_auc = -1
 
 C_values = [
     0.001,
@@ -632,48 +646,61 @@ C_values = [
     100
 ]
 
-for C in C_values:
+solver_penalty_configs = [
+    ("liblinear", "l1"),
+    ("liblinear", "l2"),
+    ("lbfgs", "l2"),
+    ("saga", "l1"),
+    ("saga", "l2"),
+]
+class_weight_values = [None, "balanced"]
+fit_intercept_values = [True, False]
+max_iter_values = [1500]
 
-    print(f"\nTesting Logistic Regression C={C}")
+for solver, penalty in solver_penalty_configs:
+    for class_weight in class_weight_values:
+        for fit_intercept in fit_intercept_values:
+            for max_iter in max_iter_values:
+                for C in C_values:
+                    params = {
+                        "C": C,
+                        "solver": solver,
+                        "penalty": penalty,
+                        "class_weight": class_weight,
+                        "fit_intercept": fit_intercept,
+                        "max_iter": max_iter,
+                        "random_state": args.seed
+                    }
 
-    model = LogisticRegression(
-        C=C,
-        max_iter=1500,
-        solver="liblinear",
-        random_state=args.seed
-    )
+                    print(f"\nTesting Logistic Regression: {params}")
 
-    model.fit(X_train_final, y_train)
+                    model = LogisticRegression(**params)
+                    model.fit(X_train_final, y_train)
 
-    probabilities = model.predict_proba(X_val_final)[:, 1]
+                    probabilities = model.predict_proba(X_val_final)[:, 1]
 
-    # IMPORTANT:
-    # This is the exact feature configuration used to build
-    # X_train_final and X_val_final.
-    #
-    # It is saved separately for every C value.
+                    # Keep the feature representation fixed while comparing
+                    # classifier hyperparameters.
+                    auc = save_result(
+                        experiment_name=(
+                            "Logistic Regression "
+                            f"solver={solver}, penalty={penalty}, C={C}, "
+                            f"class_weight={class_weight}, "
+                            f"fit_intercept={fit_intercept}, max_iter={max_iter}"
+                        ),
+                        model_name="LogisticRegression",
+                        probabilities=probabilities,
+                        model_params=params,
+                        feature_config=best_feature_config
+                    )
 
-    auc = save_result(
-        experiment_name=f"Logistic Regression C={C}",
-        model_name="LogisticRegression",
-        probabilities=probabilities,
-        model_params={
-            "C": C,
-            "solver": "liblinear",
-            "max_iter": 1500,
-            "random_state": args.seed
-        },
-        feature_config=best_feature_config
-    )
+                    if auc > best_lr_auc:
+                        best_lr_auc = auc
+                        best_lr_params = params
 
-    if auc > best_c_auc:
+print("\nBest Logistic Regression parameters:", best_lr_params)
+print("Best Logistic Regression AUROC:", best_lr_auc)
 
-        best_c_auc = auc
-        best_c = C
-
-
-print("\nBest Logistic Regression C:", best_c)
-print("Best C AUROC:", best_c_auc)
 
 
 # ============================================================
@@ -812,8 +839,19 @@ best_configurations = {
 
     "selected_feature_configuration": best_feature_config,
 
-    "best_logistic_regression_C": best_c,
-    "best_logistic_regression_auroc": best_c_auc
+    "best_logistic_regression_parameters": best_lr_params,
+    "best_logistic_regression_C": best_lr_params["C"],
+    "best_logistic_regression_auroc": best_lr_auc,
+    "logistic_regression_hyperparameter_values_tested": {
+        "C": C_values,
+        "solver_penalty_pairs": [
+            {"solver": solver, "penalty": penalty}
+            for solver, penalty in solver_penalty_configs
+        ],
+        "class_weight": class_weight_values,
+        "fit_intercept": fit_intercept_values,
+        "max_iter": max_iter_values
+    }
 }
 
 with open(
@@ -841,6 +879,11 @@ display_columns = [
     "Accuracy",
     "F1",
     "C",
+    "Solver",
+    "Penalty",
+    "Class_Weight",
+    "Fit_Intercept",
+    "Max_Iterations",
     "Word_Ngrams",
     "Character_Ngrams",
     "Word_Weight",

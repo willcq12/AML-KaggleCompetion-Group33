@@ -19,7 +19,7 @@ def evaluate_model(model, X_validation, y_validation, print_results=True):
     if print_results:
         print(f"F1 Score: {f1:.4f}")
         print(f"Accuracy: {accuracy:.4f}")
-        print(f"AUROC: {auroc:.4f}")
+        print(f"AUROC: {auroc:.8f}")
 
     return f1, accuracy, auroc
 
